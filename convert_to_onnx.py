@@ -76,13 +76,55 @@ if __name__ == '__main__':
     net = net.to(device)
 
     # ------------------------ export -----------------------------
-    output_onnx = 'FaceDetector.onnx'
+    output_onnx = 'FaceDetector_960_560.onnx'
     print("==> Exporting model to ONNX format at '{}'".format(output_onnx))
-    input_names = ["input0"]
-    output_names = ["output0"]
-    inputs = torch.randn(1, 3, args.long_side, args.long_side).to(device)
+    input_names = ["data"]
+    output_names = ["bbox","score","landmark"]
+    inputs = torch.randn(1,3, 960, 560 ).to(device)
+    #image_path = "./curve/test.jpg"
+    #img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    #img_raw = cv2.resize(img_raw,(640,640))
+    #img = np.float32(img_raw)
+    #im_height, im_width, _ = img.shape
+    #scale = torch.Tensor([img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
+    #img -= (104, 117, 123) 
+    #img = img.transpose(2, 0, 1)
+    #img = torch.from_numpy(img).unsqueeze(0)
+    #inputs = img.to(device)
+    
+    loc, conf, landms = net(inputs)
+    print(loc.shape, conf.shape, landms.shape)
+    #dynamic_axes  = {'data':[2,3]}
+    torch.onnx.export(net, inputs, output_onnx, export_params=True, verbose=True,
+                                   input_names=input_names, output_names=output_names,opset_version=10)
+    import onnx
 
-    torch_out = torch.onnx._export(net, inputs, output_onnx, export_params=True, verbose=False,
-                                   input_names=input_names, output_names=output_names)
+    onnx_model = onnx.load('FaceDetector_960_560.onnx')
+    onnx.checker.check_model(onnx_model)
+
+    import onnxruntime
+
+    ort_session = onnxruntime.InferenceSession('FaceDetector_960_560.onnx')
+
+    def to_numpy(tensor):
+        return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+    # compute ONNX Runtime output prediction
+    ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(inputs)}
+    bbox,score,landmark = ort_session.run(None, ort_inputs)
+    conf_nump=to_numpy(conf)
+
+    #print(loc[0,:,:][250:])
+
+    print("conf.size:",conf_nump.shape)
+    
+    print("bbox.size:",bbox.shape)
+    print("landmark.size:",landmark.shape)
+
+    # compare ONNX Runtime and PyTorch results
+    np.testing.assert_allclose(to_numpy(loc), bbox, rtol=1e-03, atol=1e-05)
+
+    print("Exported model has been tested with ONNXRuntime, and the result looks good!")
+    #print(inputs[0][0])
 
 

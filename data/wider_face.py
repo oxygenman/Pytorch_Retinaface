@@ -39,12 +39,39 @@ class WiderFaceDetection(data.Dataset):
 
     def __getitem__(self, index):
         img = cv2.imread(self.imgs_path[index])
+        if img is None:
+           print(self.imgs_path[index])
         height, width, _ = img.shape
 
         labels = self.words[index]
         annotations = np.zeros((0, 15))
         if len(labels) == 0:
-            return annotations
+            '''#给无标签数据打上全为0的标签
+            annotations=np.append(annotations,np.zeros((1,15)),axis=0)
+            target=np.array(annotations)
+            if self.preproc is not None:
+                img, target = self.preproc(img, target)
+            return torch.from_numpy(img), target '''	
+            annotation = np.zeros((1, 15))	
+            # bbox	
+            annotation[0, 0] = 0  # x1	
+            annotation[0, 1] = 0  # y1	
+            annotation[0, 2] = 0  # x2	
+            annotation[0, 3] = 0  # y2	
+            # landmarks	
+            annotation[0, 4] = -1  # l0_x	
+            annotation[0, 5] = -1   # l0_y	
+            annotation[0, 6] = -1   # l1_x	
+            annotation[0, 7] = -1   # l1_y	
+            annotation[0, 8] = -1   # l2_x	
+            annotation[0, 9] = -1   # l2_y	
+            annotation[0, 10] = -1   # l3_x	
+            annotation[0, 11] = -1   # l3_y	
+            annotation[0, 12] = -1   # l4_x	
+            annotation[0, 13] = -1   # l4_y	
+            annotation[0, 14] = 0	
+            annotations = np.append(annotations, annotation, axis=0)	
+            target = np.array(annotations)
         for idx, label in enumerate(labels):
             annotation = np.zeros((1, 15))
             # bbox

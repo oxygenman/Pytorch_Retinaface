@@ -53,21 +53,36 @@ class MultiBoxLoss(nn.Module):
             ground_truth (tensor): Ground truth boxes and labels for a batch,
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
-
+        #predictions:包含网络的三部分输出
+        #priors是之前根据各个featuremap生成的priorbox 数据
+        #假如batch szie是10,那么:
+        #loc_data : [10,4200,4]
+        #conf_data:  [10,4200,2]
+        #lambda_data: [10,4200,10]
         loc_data, conf_data, landm_data = predictions
         priors = priors
-        num = loc_data.size(0)
-        num_priors = (priors.size(0))
-
+        num = loc_data.size(0) # batch size
+        num_priors = (priors.size(0)) # 每张图片产生的prior box的个数
+        #num为batchsize()
         # match priors (default boxes) and ground truth boxes
+        #[num,4200,4]
+        #下面这三个是用来存储prior box 和 groundtruth 匹配之后生成的和网络输出结构一样的训练数据 
         loc_t = torch.Tensor(num, num_priors, 4)
+        #[num,4200,10]
         landm_t = torch.Tensor(num, num_priors, 10)
+        #[num,4200]
         conf_t = torch.LongTensor(num, num_priors)
+        #遍历batch中的每一张图片,使用groundtruth和priorbox进行匹配
         for idx in range(num):
+            #[boxnum,4]
             truths = targets[idx][:, :4].data
+            #[boxnum,1]
             labels = targets[idx][:, -1].data
+            #[boxnum,10]
             landms = targets[idx][:, 4:14].data
+            #[4200,4]
             defaults = priors.data
+            #匹配先验框和groundtruth找出正负样本
             match(self.threshold, truths, defaults, self.variance, labels, landms, loc_t, conf_t, landm_t, idx)
         if GPU:
             loc_t = loc_t.cuda()
@@ -77,8 +92,11 @@ class MultiBoxLoss(nn.Module):
         zeros = torch.tensor(0).cuda()
         # landm Loss (Smooth L1)
         # Shape: [batch,num_priors,10]
+        # mobilenet [1024,4200]
         pos1 = conf_t > zeros
+        #batch中每张图片所包含的正样本个数
         num_pos_landm = pos1.long().sum(1, keepdim=True)
+        #batch 中所有正样本的个数
         N1 = max(num_pos_landm.data.sum().float(), 1)
         pos_idx1 = pos1.unsqueeze(pos1.dim()).expand_as(landm_data)
         landm_p = landm_data[pos_idx1].view(-1, 10)
@@ -101,13 +119,15 @@ class MultiBoxLoss(nn.Module):
         loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
 
         # Hard Negative Mining
+        #把正样本的分类损失置0
         loss_c[pos.view(-1, 1)] = 0 # filter out pos boxes for now
         loss_c = loss_c.view(num, -1)
-        _, loss_idx = loss_c.sort(1, descending=True)
-        _, idx_rank = loss_idx.sort(1)
+        _, loss_idx = loss_c.sort(1, descending=True)#将loss降序排列
+        _, idx_rank = loss_idx.sort(1)#将loss的index值升序排列
         num_pos = pos.long().sum(1, keepdim=True)
-        num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
-        neg = idx_rank < num_neg.expand_as(idx_rank)
+        #num_neg<=self.negpos_ratio*num_pos
+        num_neg = torch.clamp(self.negpos_ratio*num_pos + 200, max=pos.size(1)-1)#防止num_neg=0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+        neg = idx_rank < num_neg.expand_as(idx_rank)#选出num_neg个负样本
 
         # Confidence Loss Including Positive and Negative Examples
         pos_idx = pos.unsqueeze(2).expand_as(conf_data)

@@ -18,12 +18,13 @@ class PriorBox(object):
         anchors = []
         for k, f in enumerate(self.feature_maps):
             min_sizes = self.min_sizes[k]
+            #遍历每个坐标点
             for i, j in product(range(f[0]), range(f[1])):
                 for min_size in min_sizes:
                     s_kx = min_size / self.image_size[1]
                     s_ky = min_size / self.image_size[0]
-                    dense_cx = [x * self.steps[k] / self.image_size[1] for x in [j + 0.5]]
-                    dense_cy = [y * self.steps[k] / self.image_size[0] for y in [i + 0.5]]
+                    dense_cx = [x * self.steps[k] / self.image_size[1] for x in [j+0.5]]
+                    dense_cy = [y * self.steps[k] / self.image_size[0] for y in [i+0.5]]
                     for cy, cx in product(dense_cy, dense_cx):
                         anchors += [cx, cy, s_kx, s_ky]
 

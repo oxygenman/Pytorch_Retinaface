@@ -112,16 +112,19 @@ def match(threshold, truths, priors, variances, labels, landms, loc_t, conf_t, l
     Return:
         The matched indices corresponding to 1)location 2)confidence 3)landm preds.
     """
-    # jaccard index
-    overlaps = jaccard(
+    # jaccard index 即 IOU
+    # shape:[num_groundtruth,num_prior]
+    # 计算每一个priorbox和groundtruth的交并比
+    overlaps =jaccard (
         truths,
         point_form(priors)
     )
+    print(labels)
     # (Bipartite Matching)
     # [1,num_objects] best prior for each ground truth
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
-
     # ignore hard gt
+    #排除与groundtruth<0.2的先验框
     valid_gt_idx = best_prior_overlap[:, 0] >= 0.2
     best_prior_idx_filter = best_prior_idx[valid_gt_idx, :]
     if best_prior_idx_filter.shape[0] <= 0:
@@ -218,10 +221,11 @@ def decode(loc, priors, variances):
     Return:
         decoded bounding box predictions
     """
-
+    #这里说明priors的坐标结构是(cx,cy,w,h),分别表示边界框的中心坐标及宽高.
     boxes = torch.cat((
         priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
         priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
+    #计算出左上角和右下角的坐标
     boxes[:, :2] -= boxes[:, 2:] / 2
     boxes[:, 2:] += boxes[:, :2]
     return boxes
@@ -326,5 +330,14 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
         # keep only elements with an IoU <= overlap
         idx = idx[IoU.le(overlap)]
     return keep, count
+
+if __name__ == "__main__":
+    box_a=torch.tensor([[0,0,0,0]])
+    box_b=torch.tensor([[1,2,3,4],[5,6,7,8]])
+    overlaps=jaccard(box_a,box_b)
+    best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
+    print(overlaps.data)
+    print(best_prior_overlap.data)
+    print(best_prior_idx.data)
 
 
